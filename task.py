@@ -101,13 +101,23 @@ def game_screen(screen):
                 running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
-                    board.top += board.cell_size
+                    for i in range(board.height - 1, -1, -1):
+                        board.board[i] = board.board[i - 1]
                 if event.key == pygame.K_DOWN:
-                    board.top -= board.cell_size
+                    temp = board.board[0]
+                    for i in range(board.height - 1):
+                        board.board[i] = board.board[i + 1]
+                    board.board[-1] = temp
                 if event.key == pygame.K_LEFT:
-                    board.left += board.cell_size
+                    for i in range(board.height):
+                        for j in range(board.width - 1, -1, -1):
+                            board.board[i][j] = board.board[i][j - 1]
                 if event.key == pygame.K_RIGHT:
-                    board.left -= board.cell_size
+                    for i in range(board.height):
+                        temp = board.board[i][0]
+                        for j in range(board.width - 1):
+                            board.board[i][j] = board.board[i][j + 1]
+                        board.board[i][-1] = temp
         board.render(screen)
         pygame.display.flip()
     return 0
