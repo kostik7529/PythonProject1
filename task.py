@@ -1,20 +1,17 @@
-import os
-import sys
-import pygame
+import copy
 
+import pygame
 
 class Board:
     # создание поля
-    def __init__(self, width, height, name):
+    def __init__(self, width, height):
         self.width = width
         self.height = height
-        self.board = [i.split() for i in open(name).readlines()]
+        self.board = [[0] * width for _ in range(height)]
         # значения по умолчанию
         self.left = 10
         self.top = 10
-        self.cell_size = load_image('img_2.png').get_size()[0]
-        self.x = 5
-        self.y = 5
+        self.cell_size = 60
 
     # настройка внешнего вида
     def set_view(self, left, top, cell_size):
@@ -22,7 +19,7 @@ class Board:
         self.top = top
         self.cell_size = cell_size
 
-    def position(self, position, screen):
+    def position(self, position):
         x, y = int((position[0] - self.left) / self.cell_size), int((position[1] - self.top) / self.cell_size)
         if y >= self.height or x >= self.width:
             print(None)
@@ -33,102 +30,149 @@ class Board:
         screen.fill((0, 0, 0))
         for x in range(self.width):
             for y in range(self.height):
-                if self.board[y][x] == '0':
-                    image = load_image('img_2.png')
+                pygame.draw.rect(screen, 'white', (self.left + x * self.cell_size, self.top + y * self.cell_size, self.cell_size, self.cell_size),1)
+        pygame.display.flip()
+
+
+
+class Lines(Board):
+    # создание поля
+    def __init__(self, width, height):
+        super().__init__(width, height)
+        self.x = None
+        self.y = None
+        self.cur = 1
+        self.clock = pygame.time.Clock()
+
+    def position(self, position):
+        x, y = int((position[0] - self.left) / self.cell_size), int((position[1] - self.top) / self.cell_size)
+        if y >= self.height or x >= self.width:
+            print(None)
+        else:
+            if self.board[y][x] == -1 and self.x is None:
+                self.board[y][x] = 0
+                self.x = x
+                self.y = y
+            elif self.x == x and self.y == y:
+                self.board[y][x] = -1
+                self.x = None
+                self.y = None
+            elif self.board[y][x] != -1 and not self.x is None:
+                lab = self.has_path(self.x, self.y, x, y)
+                if lab:
+                    for i in range(self.width):
+                        for j in range(self.height):
+                            self.board[j][i] = -1 if self.board[j][i] == -1 else 0
+                    path = self.find_path(self.board.copy(), self.x, self.y, x, y)
+                    self.go(path)
+                    self.cur = 1
+                    self.board[y][x] = -1
+                    self.x = None
+                    self.y = None
+                    self.render(screen)
                 else:
-                    image = load_image('img_1.png')
-                screen.blit(image, (self.left + x * self.cell_size, self.top + y * self.cell_size))
-        screen.blit(load_image('img_3.png'), (10 + self.x * self.cell_size + 15, 10 + self.y * self.cell_size + 7))
+                    self.cur = 1
+                    for x in range(self.width):
+                        for y in range(self.height):
+                            self.board[y][x] = -1 if self.board[y][x] == -1 else 0
+            else:
+                self.board[y][x] = -1
+
+    def render(self, screen):
+        screen.fill((0, 0, 0))
+        for x in range(self.width):
+            for y in range(self.height):
+                pygame.draw.rect(screen, 'white', (self.left + x * self.cell_size, self.top + y * self.cell_size, self.cell_size, self.cell_size),1)
+                if x == self.x and y == self.y:
+                    pygame.draw.circle(screen, 'red', (self.left + x * self.cell_size + self.cell_size * 0.5,
+                                                        self.top + y * self.cell_size + self.cell_size * 0.5),
+                                       self.cell_size * 0.5 - 2)
+                if self.board[y][x] == -1:
+                    pygame.draw.circle(screen, 'blue', (self.left + x * self.cell_size + self.cell_size * 0.5,
+                                                       self.top + y * self.cell_size + self.cell_size * 0.5),
+                                       self.cell_size * 0.5 - 2)
         pygame.display.flip()
 
+    def has_path(self, x, y, x1, y1):
+        return self.wave(x, y, x1, y1)[y1][x1] > 0
+
+    def wave(self, x, y, x1, y1):
+        self.board[y][x] = self.cur
+        if y + 1 < self.height:
+            if self.board[y + 1][x] == 0 or (self.board[y + 1][x] != -1 and self.board[y + 1][x] > self.cur):
+                self.cur += 1
+                self.wave(x, y + 1, x1, y1)
+        if x + 1 < self.width:
+            if self.board[y][x + 1] == 0 or (self.board[y][x + 1] != -1 and self.board[y][x + 1] > self.cur):
+                self.cur += 1
+                self.wave(x + 1, y, x1, y1)
+        if x - 1 >= 0:
+            if self.board[y][x - 1] == 0 or (self.board[y][x - 1] != -1 and self.board[y][x - 1] > self.cur):
+                self.cur += 1
+                self.wave(x - 1, y, x1, y1)
+        if y - 1 >= 0:
+            if self.board[y - 1][x] == 0 or (self.board[y - 1][x] != -1 and self.board[y - 1][x] > self.cur):
+                self.cur += 1
+                self.wave(x, y - 1, x1, y1)
+        return self.board
+
+    def find_path(self, map1, x1, y1, x2, y2):
+        cur = 2
+        if x1 - 1 >= 0 and map1[y1][x1 - 1] != -1:
+            map1[y1][x1 - 1] += 1
+        if x1 + 1 < self.width and map1[y1][x1 + 1] != -1:
+            map1[y1][x1 + 1] += 1
+        if y1 - 1 >= 0 and map1[y1 - 1][x1] != -1:
+            map1[y1 - 1][x1] += 1
+        if y1 + 1 < self.height and map1[y1 + 1][x1] != -1:
+            map1[y1 + 1][x1] += 1
+        while not map1[y2][x2]:
+            for i in range(self.height):
+                for j in range(self.width):
+                    if map1[i][j] != -1 and map1[i][j] == 0 and not (y1 == i and x1 == j):
+                        if j - 1 >= 0 and map1[i][j - 1] == cur - 1:
+                            map1[i][j] = cur
+                        if j + 1 < self.width and map1[i][j + 1] == cur - 1:
+                            map1[i][j] = cur
+                        if i - 1 >= 0 and map1[i - 1][j] == cur - 1:
+                            map1[i][j] = cur
+                        if i + 1 < self.height and map1[i + 1][j] == cur - 1:
+                            map1[i][j] = cur
+            if cur == 1000:
+                break
+            cur += 1
+        points = [(y2, x2)]
+        cur = map1[y2][x2] - 1
+        while not (x2 == x1 and y1 == y2):
+            points.append(list(filter(lambda x: x != (-1, -1) and map1[x[0]][x[1]] == cur, [(y2 - 1, x2) if y2 -1 >= 0 else (-1, -1), (y2, x2 - 1) if x2 - 1 >= 0 else (-1, -1),
+                               (y2 + 1, x2) if y2 + 1 < self.height else (-1, -1), (y2, x2 + 1) if x2 + 1 < self.width
+                               else (-1, -1)]))[0])
+            y2, x2 = points[-1]
+            cur -= 1
+        return points[-1::-1]
+
+    def go(self, path):
+        for i in path:
+            self.y, self.x = i
+            self.render(screen)
+            self.clock.tick(10)
 
 
-def load_image(name, colorkey=None):
-    fullname = os.path.join('data', name)
-    if not os.path.isfile(fullname):
-        print(f"Файл с изображением '{fullname}' не найден")
-        sys.exit()
-    image = pygame.image.load(fullname)
-    if colorkey is not None:
-        image = image.convert()
-        if colorkey == -1:
-            colorkey = image.get_at((0, 0))
-        image.set_colorkey(colorkey)
-    else:
-        image = image.convert_alpha()
-    return image
-
-def main_screen(screen):
-    fon = load_image("img.png")
-    pygame.display.set_mode((600, 349))
-    intro_text = ["ИГРА", "",
-                  "Для запуска игры нажми любую кнопку"]
-
-    fon = pygame.transform.scale(fon, (600, 349))
-    screen.blit(fon, (0, 0))
-    font = pygame.font.Font(None, 25)
-    text_coord = 10
-    for line in intro_text:
-        string_rendered = font.render(line, 1, pygame.Color('black' if intro_text.index(line) != len(intro_text) - 1 else 'red'))
-        intro_rect = string_rendered.get_rect()
-        text_coord += 10
-        intro_rect.top = text_coord
-        intro_rect.x = 10
-        text_coord += intro_rect.height
-        screen.blit(string_rendered, intro_rect)
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return 0
-            if event.type in [pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN]:
-                return 2
-        pygame.display.flip()
-
-
-def game_screen(screen):
-    name = input()
-    try:
-        map = open(name).readlines()
-    except Exception:
-        print('Такого файла не существует')
-        return 0
-    board = Board(len(map[0]) // 2, len(map), name)
-    pygame.display.set_mode((board.width * board.cell_size + 50, board.height * board.cell_size + 50))
+if __name__ == '__main__':
+    # инициализация Pygame:
+    pygame.init()
+    # размеры окна:
+    size = width, height = 800, 600
+    # screen — холст, на котором нужно рисовать:
+    screen = pygame.display.set_mode(size)
+    board = Lines(5, 7)
     running = True
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    for i in range(board.height - 1, -1, -1):
-                        board.board[i] = board.board[i - 1]
-                if event.key == pygame.K_DOWN:
-                    temp = board.board[0]
-                    for i in range(board.height - 1):
-                        board.board[i] = board.board[i + 1]
-                    board.board[-1] = temp
-                if event.key == pygame.K_LEFT:
-                    for i in range(board.height):
-                        for j in range(board.width - 1, -1, -1):
-                            board.board[i][j] = board.board[i][j - 1]
-                if event.key == pygame.K_RIGHT:
-                    for i in range(board.height):
-                        temp = board.board[i][0]
-                        for j in range(board.width - 1):
-                            board.board[i][j] = board.board[i][j + 1]
-                        board.board[i][-1] = temp
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                board.position(event.pos)
         board.render(screen)
         pygame.display.flip()
-    return 0
-
-screen_type = {1: main_screen, 2: game_screen}
-
-if __name__ == '__main__':
-    pygame.init()
-    size = width, height = 800, 600
-    screen = pygame.display.set_mode(size)
-    cur_screen = 1
-    while cur_screen:
-        cur_screen = screen_type[cur_screen](screen)
     pygame.quit()
